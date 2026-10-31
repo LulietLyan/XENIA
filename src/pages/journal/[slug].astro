@@ -1,0 +1,92 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import Button from '../../components/Button.astro';
+import posts from '../../data/portfolio.json';
+export function getStaticPaths() {
+  return posts.map(post => ({params: {slug: post.slug}, props: {post}}));
+}
+const { post } = Astro.props;
+const base = import.meta.env.BASE_URL;
+const toc: {id: string; text: string; level: string}[] = [];
+let html = post.html.replaceAll('__BASE__', base).replace(/<h([2-4])(?:\s[^>]*)?>([\s\S]*?)<\/h\1>/g, (_: string, level: string, text: string) => {
+  const id = `section-${toc.length + 1}`;
+  toc.push({ id, text: text.replace(/<[^>]*>/g, ''), level });
+  return `<h${level} id="${id}">${text}</h${level}>`;
+});
+const related = posts.filter(p => p.slug !== post.slug && p.category === post.category).slice(0, 2);
+if (!related.length) related.push(...posts.filter(p => p.slug !== post.slug).slice(0, 2));
+---
+<Layout title={post.title} description={post.summary} image={post.cover} article>
+  <article>
+    <header class="article-head">
+      <div class="u-container head-inner">
+        <a class="back" href={`${base}#journal`}>← 返回文章手记</a>
+        <p class="eyebrow">XENIA / {post.category} <span>约 {post.readingMinutes} 分钟</span></p>
+        <h1 class="u-heading">{post.title}</h1>
+        <p class="summary">{post.summary}</p>
+        <p class="byline">文 / XENIA <span>游戏设计与玩家观察</span></p>
+      </div>
+    </header>
+    <div class="reading-layout u-container">
+      <aside class="article-aside" data-lenis-prevent>
+        {toc.length > 1 && <details class="toc" open><summary>文章目录</summary><nav aria-label="文章目录"><ol>{toc.map(item => <li class:list={{sub: item.level !== '2'}}><a href={`#${item.id}`} set:html={item.text} /></li>)}</ol></nav></details>}
+        <p class="reading-note">文中的游戏版本、数据与观点，以原文记录时为准。</p>
+        <a class="aside-link" href="https://space.bilibili.com/26270462" target="_blank" rel="noopener noreferrer">bilibili · xenia4869 ↗</a>
+      </aside>
+      <div class="article-main">
+        <div class="prose" set:html={html} />
+        <div class="article-end"><span>全文完</span><a href="#main">回到顶部 ↑</a></div>
+        <section class="related" aria-labelledby="related-title">
+          <h2 id="related-title">相关文章</h2>
+          {related.map(item => <a class="related-link" href={`${base}journal/${item.slug}/`}><span>{item.category}</span><strong>{item.shortTitle}</strong><span aria-hidden="true">↗</span></a>)}
+        </section>
+        <Button title="所有文章" url={`${base}#journal`} arrow revealable={false} />
+      </div>
+    </div>
+  </article>
+</Layout>
+<style>
+  .article-head { padding: 8rem 0 3rem; background: linear-gradient(135deg, #fce6d7, var(--color-brand-3) 60%, var(--color-bg)); }
+  .head-inner { max-width: 58rem; }
+  .back { font-size: .7rem; display: inline-block; margin-bottom: 2.5rem; }
+  .eyebrow { font-size: .7rem; color: #7256c7; display: flex; gap: 1rem; flex-wrap: wrap; margin-bottom: 1.1rem; }
+  h1 { --fs: clamp(1.8rem, 3.5vw, 3rem); --lh: 1.45; --fw: 450; max-width: 25em; margin-bottom: 1.25rem; overflow-wrap: anywhere; }
+  .summary { font-size: .95rem; line-height: 1.85; max-width: 47em; }
+  .byline { display: flex; gap: 1rem; font-size: .65rem; margin-top: 1.5rem; }
+  .byline span { color: var(--color-text-alt); }
+  .reading-layout { max-width: 62rem; padding: 3rem 0 6rem; display: grid; grid-template-columns: 12rem minmax(0,1fr); align-items: start; gap: 3rem; }
+  .article-aside { position: sticky; top: 5rem; font-size: .65rem; line-height: 1.8; max-height: calc(100vh - 6rem); overflow: auto; padding: .5rem; }
+  .toc summary { font-size: .8rem; font-weight: 500; cursor: pointer; margin-bottom: 1rem; }
+  .toc ol { list-style: none; margin: 0; padding: 0; }
+  .toc li { margin-bottom: .6rem; }
+  .toc li.sub { padding-left: .7rem; font-size: .6rem; }
+  .toc a:hover { color: var(--color-brand-1); }
+  .reading-note { color: var(--color-text-alt); border-top: 1px solid var(--color-brand-3); margin-top: 1.5rem; padding-top: 1rem; }
+  .aside-link { color: var(--color-brand-1); }
+  .article-main { min-width: 0; }
+  .prose { font-size: .85rem; line-height: 1.95; overflow-wrap: anywhere; }
+  .prose :global(p) { margin: 0 0 1.2em; }
+  .prose :global(h2), .prose :global(h3), .prose :global(h4) { line-height: 1.6; margin: 2em 0 .8em; font-weight: 600; }
+  .prose :global(h2) { font-size: 1.45rem; }
+  .prose :global(h3) { font-size: 1.15rem; }
+  .prose :global(h4) { font-size: 1rem; }
+  .prose :global(a) { color: #7050c9; text-decoration: underline; text-underline-offset: .2em; }
+  .prose :global(figure) { margin: 1.8rem 0; }
+  .prose :global(img) { display: block; max-width: 100%; height: auto; border-radius: .4rem; background: white; margin: 1.2rem auto; }
+  .prose :global(figcaption) { font-size: .6rem; line-height: 1.8; color: var(--color-text-alt); text-align: center; }
+  .prose :global(ul), .prose :global(ol) { padding-left: 1.4em; margin-bottom: 1.4em; }
+  .prose :global(li) { margin-bottom: .5em; }
+  .prose :global(table) { border-collapse: collapse; min-width: 100%; font-size: .7rem; margin: 1rem 0; }
+  .prose :global(th), .prose :global(td) { padding: .7rem; border: 1px solid #d9d7df; vertical-align: top; min-width: 7rem; }
+  .prose :global(th) { background: var(--color-brand-3); }
+  .prose :global(.table-wrap), .prose :global(.table-wrapper) { max-width: 100%; overflow-x: auto; }
+  .prose :global(blockquote) { margin: 1.5rem 0; border-left: 3px solid var(--color-brand-1); background: var(--color-brand-3); padding: 1.2rem 1.5rem; }
+  .article-end { border-top: 1px solid var(--color-brand-3); margin-top: 3rem; padding-top: 1rem; display: flex; justify-content: space-between; gap: 1rem; color: var(--color-text-alt); font-size: .65rem; }
+  .related { margin: 3rem 0 2rem; }
+  .related h2 { font-weight: 500; font-size: 1.2rem; margin-bottom: 1rem; }
+  .related-link { display: flex; gap: 1rem; align-items: center; border-top: 1px solid var(--color-brand-3); padding: 1.1rem 0; }
+  .related-link strong { font-weight: 500; font-size: .9rem; line-height: 1.6; flex: 1; }
+  .related-link span { color: var(--color-brand-1); font-size: .6rem; }
+  @media (max-width: 900px) { .reading-layout { grid-template-columns: 1fr; gap: 1.5rem; } .article-aside { position: static; max-height: 16rem; background: #eeeafa80; padding: 1rem; border-radius: .7rem; } .reading-note { margin-top: .5rem; } }
+  @media (max-width: 500px) { .article-head { padding-top: 6rem; } .reading-layout { padding-top: 1.5rem; } .related-link { flex-wrap: wrap; } .related-link strong { flex-basis: 70%; } .prose { font-size: 1rem; } }
+</style>

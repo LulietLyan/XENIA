@@ -1,0 +1,241 @@
+---
+import type { Image } from "../types";
+
+interface Props {
+  class?: string;
+  images: Image[];
+}
+
+const { images, class: className } = Astro.props;
+---
+
+<sy-gallery class:list={className}>
+  <div class="outer">
+    <div class="inner">
+      {
+        images.map((img) => (
+          <div class="img">
+            <img {...img} loading="lazy" decoding="async" />
+          </div>
+        ))
+      }
+    </div>
+  </div>
+  <div class="dots"></div>
+</sy-gallery>
+
+<style>
+  sy-gallery {
+    display: flex;
+    width: 100%;
+    overflow: hidden;
+    position: relative;
+  }
+
+  .outer {
+    position: relative;
+    flex: 1;
+    z-index: 1;
+  }
+
+  .inner {
+    display: flex;
+    position: relative;
+    width: 100%;
+    height: 100%;
+    flex-shrink: 0;
+  }
+
+  .img {
+    flex-shrink: 0;
+    width: 100%;
+    height: 100%;
+    position: relative;
+    overflow: hidden;
+
+    img {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      transform: translateX(var(--ix));
+      will-change: transform;
+    }
+  }
+
+  .dots {
+    position: absolute;
+    bottom: 0.6rem;
+    left: 0;
+    right: 0;
+    margin: 0 auto;
+    width: min-content;
+    display: flex;
+    gap: 0.5rem;
+    z-index: 2;
+
+    :global(button) {
+      width: 0.6rem;
+      height: 0.6rem;
+      border: none;
+      cursor: pointer;
+      padding: 0;
+      background: var(--color-white);
+      opacity: 0.6;
+
+      &:hover {
+        opacity: 0.8;
+      }
+    }
+
+    :global(button.is-active) {
+      opacity: 1;
+    }
+  }
+</style>
+
+<script>
+  import { gsap } from "gsap";
+  import { Draggable } from "gsap/Draggable";
+  import { InertiaPlugin } from "gsap/InertiaPlugin";
+  import { addResizeObserver } from "../utils/observers";
+
+  gsap.registerPlugin(Draggable, InertiaPlugin);
+
+  class Gallery extends HTMLElement {
+    currentIndex = 0;
+    itemWidth = -1;
+    innerEl: HTMLElement;
+    images: HTMLElement[];
+    gsapDraggable?: InstanceType<typeof Draggable>;
+    buttons: HTMLButtonElement[] = [];
+    snapX?: (n: number) => number;
+
+    constructor() {
+      super();
+
+      this.images = [...this.querySelectorAll<HTMLElement>(".img")];
+      this.innerEl = this.querySelector(".inner") as HTMLElement;
+
+      addResizeObserver(this);
+    }
+
+    connectedCallback() {
+      if (!this.images.length) return;
+      this.initDots();
+      this.initSlider();
+      this.onWidthResize();
+    }
+
+    onWidthResize() {
+      const { innerEl } = this;
+
+      const width = Math.floor(innerEl.getBoundingClientRect().width);
+
+      if (width <= 0 || this.itemWidth === width) {
+        return;
+      }
+
+      this.itemWidth = width;
+      this.snapX = gsap.utils.snap(width);
+
+      this.reCalc();
+    }
+
+    initDots() {
+      const { images } = this;
+
+      const dots = this.querySelector(".dots") as HTMLElement;
+
+      images.forEach((_item, i) => {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.setAttribute("aria-label", `查看第 ${i + 1} 张图片`);
+        btn.setAttribute("aria-current", String(i === 0));
+        btn.classList.toggle("is-active", i === 0);
+        btn.addEventListener("click", () => this.goto(i));
+        dots.append(btn);
+        this.buttons.push(btn);
+      });
+    }
+
+    reCalc() {
+      const { gsapDraggable, innerEl, images, itemWidth } = this;
+
+      if (!gsapDraggable || itemWidth <= 0) {
+        return;
+      }
+
+      gsapDraggable.applyBounds({
+        maxX: 0,
+        minX: itemWidth * -(images.length - 1),
+      });
+      gsap.set(innerEl, {
+        x: 0,
+      });
+      gsapDraggable.update(true);
+
+      this.onUpdate();
+    }
+
+    goto(index: number) {
+      const { itemWidth, gsapDraggable, innerEl } = this;
+      if (!gsapDraggable || itemWidth <= 0) return;
+
+      const x = itemWidth * -Math.max(0, Math.min(this.images.length - 1, index));
+
+      gsap.killTweensOf(innerEl);
+
+      gsap.to(innerEl, {
+        x,
+        overwrite: true,
+        duration: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 0.8,
+        ease: "power3.out",
+        onUpdate: () => {
+          gsapDraggable.update();
+          this.onUpdate();
+        },
+      });
+    }
+
+    initSlider() {
+      const { innerEl } = this;
+
+      this.gsapDraggable = Draggable.create(innerEl, {
+        type: "x",
+        inertia: true,
+        edgeResistance: 1,
+        bounds: { minX: -1, maxX: 1 },
+        snap: {
+          x: (n) => this.snapX ? this.snapX(n) : n,
+        },
+        onDrag: this.onUpdate,
+        onThrowUpdate: this.onUpdate,
+      })[0];
+    }
+
+    onUpdate = () => {
+      const { images, itemWidth, gsapDraggable, buttons, currentIndex } = this;
+
+      if (!gsapDraggable || itemWidth <= 0 || !images.length) return;
+      const { x } = gsapDraggable;
+
+      const index = Math.max(0, Math.min(images.length - 1, Math.round(-x / itemWidth)));
+
+      images.forEach((item, i) => {
+        const xx = x + itemWidth * i;
+        const progress = xx / itemWidth;
+        item.style.setProperty("--ix", `${progress * (-1 / 1.5) * 100}%`);
+      });
+
+      buttons[currentIndex]?.classList.remove("is-active");
+      buttons[currentIndex]?.setAttribute("aria-current", "false");
+      buttons[index]?.classList.add("is-active");
+      buttons[index]?.setAttribute("aria-current", "true");
+
+      this.currentIndex = index;
+    };
+  }
+
+  customElements.define("sy-gallery", Gallery);
+</script>

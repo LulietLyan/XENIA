@@ -1,0 +1,96 @@
+---
+import type portfolio from "../data/portfolio.json";
+interface Props { posts: typeof portfolio; }
+const { posts } = Astro.props;
+const base = import.meta.env.BASE_URL;
+const categories = ["全部", ...new Set(posts.map(post => post.category))];
+---
+<section id="journal" class="journal u-container" aria-labelledby="journal-title">
+  <div class="heading">
+    <p class="eyebrow">FIELD NOTES / 文章手记</p>
+    <h2 id="journal-title" class="u-heading" data-sy-reveal="words">文章与项目</h2>
+    <p class="u-text intro">游戏设计拆解、商业化分析、社区观察，以及我的项目记录。</p>
+  </div>
+  <div class="journal-tools" hidden>
+    <div class="filters" role="group" aria-label="按文章分类筛选">
+      {categories.map((category, i) => <button type="button" data-category={category} aria-pressed={i === 0}>{category}</button>)}
+    </div>
+    <label class="search"><span class="u-sr-only">搜索文章</span><input type="search" placeholder="搜索游戏、主题…" aria-label="搜索文章" /></label>
+  </div>
+  <p class="result-count" aria-live="polite">共 {posts.length} 篇记录</p>
+  <div class="post-grid">
+    {posts.map((post, i) => (
+      <article class="post" data-category={post.category} data-search={`${post.title} ${post.summary} ${post.category}`}>
+        <a href={`${base}journal/${post.slug}/`} class="post-link">
+          <div class="cover"><img src={`${base}${post.cover}`} alt={post.shortTitle} width="960" height="600" loading="lazy" decoding="async" /><span class="number">{String(i + 1).padStart(2, '0')}</span></div>
+          <div class="post-content">
+            <div class="meta"><span>{post.category}</span><span>约 {post.readingMinutes} 分钟</span></div>
+            <h3>{post.shortTitle}</h3>
+            <p>{post.summary}</p>
+            <span class="read">阅读全文 <span aria-hidden="true">↗</span></span>
+          </div>
+        </a>
+      </article>
+    ))}
+  </div>
+  <p class="empty" hidden>暂时没有匹配的文章，试试其他关键词或分类。</p>
+</section>
+<style>
+  .journal { position: relative; z-index: 2; padding-top: 8rem; padding-bottom: 5rem; }
+  .heading { max-width: 43rem; margin-bottom: 2.5rem; }
+  .eyebrow { font-size: 0.65rem; letter-spacing: 0.16em; margin-bottom: 1rem; color: var(--color-brand-1); font-weight: 600; }
+  h2 { --fs: 2.7rem; --lh: 1.25; margin-bottom: 1rem; }
+  .intro { --fh: 1.8; color: var(--color-text-alt); }
+  .journal-tools { display: flex; flex-wrap: wrap; gap: 1.5rem; justify-content: space-between; align-items: center; }
+  .journal-tools[hidden] { display: none; }
+  .filters { display: flex; flex-wrap: wrap; gap: 0.45rem; }
+  .filters button { background: transparent; border: 1px solid rgba(var(--rgb-brand-1),0.3); border-radius: 99px; padding: 0.5rem 0.85rem; font: inherit; font-size: 0.7rem; cursor: pointer; transition: background .2s, color .2s; }
+  .filters button[aria-pressed="true"] { background: var(--color-brand-1); color: white; }
+  input { width: 11rem; max-width: 100%; background: white; color: var(--color-text); border: 1px solid var(--color-brand-3); border-radius: 99px; padding: .65rem 1rem; font: inherit; font-size: .75rem; }
+  .result-count { color: var(--color-text-alt); font-size: .65rem; margin: 1rem 0; }
+  .post-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 2rem; }
+  .post { min-width: 0; border-radius: 1.1rem; background: white; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,.035); transition: transform .3s; }
+  .post:hover { transform: translateY(-5px); }
+  .post[hidden] { display: none; }
+  .post-link { height: 100%; display: flex; flex-direction: column; }
+  .cover { position: relative; aspect-ratio: 16 / 10; overflow: hidden; background: var(--color-brand-3); }
+  .cover img { width: 100%; height: 100%; object-fit: cover; transition: transform .5s; }
+  .post:hover img { transform: scale(1.035); }
+  .number { position: absolute; left: 1rem; top: 1rem; border-radius: 99px; padding: .35rem .6rem; background: var(--color-bg); font-size: .6rem; }
+  .post-content { padding: 1.6rem; display: flex; flex: 1; flex-direction: column; }
+  .meta { display: flex; justify-content: space-between; gap: .5rem; color: var(--color-brand-1); font-size: .65rem; margin-bottom: .75rem; }
+  h3 { font-size: 1.25rem; font-weight: 500; line-height: 1.5; margin: 0 0 .65rem; }
+  .post-content p { font-size: .8rem; line-height: 1.85; color: var(--color-text-alt); margin: 0 0 1.3rem; }
+  .read { font-size: .7rem; margin-top: auto; display: flex; justify-content: space-between; align-items: center; }
+  .read span { font-size: 1.2rem; color: var(--color-brand-1); }
+  .empty { padding: 3rem 0; text-align: center; color: var(--color-text-alt); }
+  @media (max-width: 650px) { .post-grid { grid-template-columns: 1fr; gap: 1.5rem; } h2 { --fs: 2rem; } .journal { padding-top: 5rem; } .post-content { padding: 1.25rem; } }
+</style>
+<script>
+  import ScrollTrigger from 'gsap/ScrollTrigger';
+  const section = document.querySelector<HTMLElement>('#journal');
+  if (section) {
+    section.querySelector<HTMLElement>('.journal-tools')!.hidden = false;
+    const buttons = [...section.querySelectorAll<HTMLButtonElement>('.filters button')];
+    const posts = [...section.querySelectorAll<HTMLElement>('.post')];
+    const search = section.querySelector<HTMLInputElement>('input')!;
+    let category = '全部';
+    function filterPosts() {
+      const query = search.value.trim().toLocaleLowerCase();
+      let count = 0;
+      posts.forEach(post => {
+        post.hidden = !((category === '全部' || post.dataset.category === category) && post.dataset.search!.toLocaleLowerCase().includes(query));
+        if (!post.hidden) count++;
+      });
+      section!.querySelector('.result-count')!.textContent = `共 ${count} 篇记录`;
+      section!.querySelector<HTMLElement>('.empty')!.hidden = count > 0;
+      ScrollTrigger.refresh();
+    }
+    buttons.forEach(button => button.addEventListener('click', () => {
+      category = button.dataset.category!;
+      buttons.forEach(item => item.setAttribute('aria-pressed', String(item === button)));
+      filterPosts();
+    }));
+    search.addEventListener('input', filterPosts);
+  }
+</script>

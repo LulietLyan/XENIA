@@ -1,0 +1,92 @@
+---
+import Layout from "../layouts/Layout.astro";
+import HeroHome from "../components/HeroHome.astro";
+import TextMarquee from "../components/TextMarquee.astro";
+import GalleryText from "../components/GalleryText.astro";
+import Faqs from "../components/Faqs.astro";
+import StepsTimeline from "../components/StepsTimeline.astro";
+import Plans from "../components/Plans.astro";
+import Statements from "../components/Statements.astro";
+import Introducing from "../components/Introducing.astro";
+import Journal from "../components/Journal.astro";
+import Bilibili from "../components/Bilibili.astro";
+import GL from "../components/GL.astro";
+import GLPlaces from "../components/GlPlaces.astro";
+import posts from "../data/portfolio.json";
+const base = import.meta.env.BASE_URL;
+const postUrl = (slug: string) => `${base}journal/${slug}/`;
+const project = posts.find(p => p.slug === "oh-my-boss")!;
+---
+
+<Layout title="XENIA · 游戏作品与分析">
+  <HeroHome
+    eyebrow="GAME DESIGN / PERSONAL PORTFOLIO"
+    title="XENIA. Play & Design."
+    subtitle="我是 XENIA。这里整理了我的游戏项目、设计分析和游戏经历。"
+    cta={{ title: "查看作品", url: "#work" }}
+  />
+
+  <section id="about" aria-label="关于 XENIA">
+    <Introducing
+      title="关于我"
+      text="我有十年游戏经历，常玩开放世界、MMORPG 和内容向游戏。平时关注玩法机制、用户心理和社区反馈，也会写分析、做攻略，记录自己的观察。"
+      cta={{ title: "查看游戏经历", url: postUrl("gaming-journey") }}
+    />
+  </section>
+
+  <StepsTimeline
+    title="我关注的问题"
+    items={[
+      { title: "玩法体验", text: "关卡路线、战斗节奏和能力设计，怎样影响玩家的探索、学习与操作？" },
+      { title: "用户选择", text: "玩家为什么购买外观？展示场景、社交需求和定价怎样影响付费意愿？" },
+      { title: "社区反馈", text: "测试期间，玩家在讨论哪些问题？结合社区数据和具体反馈，整理改进建议。" },
+    ]}
+  />
+
+  <section id="work" aria-label="项目实践">
+    <GalleryText
+      title="Oh my boss"
+      text="办公室题材的双人合作闯关音游。玩家需要跟随节拍操作，配合完成关卡。2025 年腾讯 IE 校招生培训项目，Minigame 第二名。"
+      cta={{ title: "阅读项目设计", url: postUrl("oh-my-boss") }}
+      images={project.gallery.map(image => ({src: `${base}${image.src}`, alt: image.alt}))}
+      marqueeTexts={["OH MY BOSS", "CO-OP & RHYTHM", "OFFICE ADVENTURE", "MINIGAME 2025"]}
+    />
+  </section>
+
+  <Statements items={[
+    { title: "长期游玩", text: "记录开放世界、MMORPG 和内容向游戏的游玩经历。" },
+    { title: "竞速与攻略", text: "参与 PVE 竞速和高难副本，整理路线与操作经验。" },
+    { title: "社区内容", text: "分享游戏二创、外观建造与游戏日常，关注玩家讨论。" },
+  ]} />
+
+  <TextMarquee class="marquee" texts={["GAME DESIGN", "PLAYER INSIGHT", "LEVEL DESIGN", "COMMUNITY RESEARCH"]} />
+
+  <Plans
+    title="游戏分析"
+    subtitle="收录玩法、关卡、商业化与社区研究。"
+    items={[
+      { title: "EXPERIENCE & SYSTEMS", theme: {name: "体验", label: "与机制"}, link: {title: "阅读燕云分析", url: postUrl("where-winds-meet")}, features: [{title: "只狼 · 战斗与沉浸感"}, {title: "王国之泪 · 能力与解法"}, {title: "燕云 · 开放世界探索"}] },
+      { title: "PEOPLE & MOTIVATION", theme: {name: "玩家", label: "与动机"}, link: {title: "阅读逆水寒分析", url: postUrl("justice-mobile")}, features: [{title: "逆水寒 · 外观与消费心理"}, {title: "金铲铲 · 商业化设计"}, {title: "七界梦谭 · 二测社区监测"}] },
+    ]}
+  />
+
+  <Journal posts={posts} />
+  <Bilibili />
+
+  <Faqs
+    title="阅读说明"
+    mobileTitle="阅读说明"
+    subtitle="内容范围与资料说明。"
+    items={[
+      { question: "这里有哪些内容？", answer: "一个培训项目、六篇游戏分析与社区研究，以及个人游戏经历。文章可在线阅读，附有图表和游戏截图。" },
+      { question: "文章中的数据是什么时候的？", answer: "游戏版本、数据和案例以原文记录时为准。文章是个人分析，不代表游戏官方观点。" },
+      { question: "在哪里查看游戏视频？", answer: "点击导航栏的「哔哩哔哩」，或上方的 bilibili 卡片，可以访问我的主页 xenia4869。" },
+    ]}
+  />
+  <GL />
+  <GLPlaces />
+</Layout>
+
+<style>
+  .marquee { padding: 2rem 0; z-index: 9; }
+</style>

@@ -1,0 +1,724 @@
+---
+
+---
+
+<sy-gl aria-hidden="true"></sy-gl>
+
+<script>
+  import {
+    Color,
+    ExtrudeGeometry,
+    Group,
+    IcosahedronGeometry,
+    LinearFilter,
+    Matrix4,
+    Mesh,
+    OrthographicCamera,
+    PlaneGeometry,
+    Raycaster,
+    RGBAFormat,
+    Scene,
+    ShaderMaterial,
+    Shape,
+    Vector2,
+    Vector3,
+    WebGLRenderer,
+    WebGLRenderTarget,
+  } from "three";
+  import gsap from "gsap";
+  import ScrollTrigger from "gsap/ScrollTrigger";
+  import { addResizeObserver } from "../utils/observers";
+
+  gsap.registerPlugin(ScrollTrigger);
+
+  if (!window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+  const FRUSTUM_SIZE = 5;
+  const RADIUS = 1;
+  const DETAIL = 2;
+  const SHAPE_OFFSET = 0.9;
+  const THICKNESS = 0.02;
+  const BEVEL_SIZE = 0.02;
+  const BEVEL_SEGMENTS = 2;
+
+  const container = document.querySelector("sy-gl") as HTMLElement;
+  const scene = new Scene();
+
+  let aspect = window.innerWidth / window.innerHeight;
+
+  const camera = new OrthographicCamera(
+    (-FRUSTUM_SIZE * aspect) / 2,
+    (FRUSTUM_SIZE * aspect) / 2,
+    FRUSTUM_SIZE / 2,
+    -FRUSTUM_SIZE / 2,
+    0,
+    10.6,
+  );
+  camera.position.set(0, 0, 10);
+  camera.lookAt(0, 0, 0);
+  camera.updateProjectionMatrix();
+
+  const renderer = new WebGLRenderer({ antialias: true });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio ?? 1, 2));
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.setClearColor("#fff");
+  renderer.setClearAlpha(0);
+
+  const canvas = renderer.domElement;
+  container.appendChild(canvas);
+
+  const globals = {
+    uTime: { value: 0 },
+    uVel: { value: 0 },
+    uResolution: {
+      value: new Vector2(window.innerWidth, window.innerHeight),
+    },
+  };
+
+  // ─── Render target for refraction ─────────────────────────────────────────────
+
+  const renderTarget = new WebGLRenderTarget(
+    window.innerWidth,
+    window.innerHeight,
+    {
+      minFilter: LinearFilter,
+      magFilter: LinearFilter,
+      format: RGBAFormat,
+      depthBuffer: false,
+      stencilBuffer: false,
+      generateMipmaps: false,
+    },
+  );
+
+  const panelVertexShader = /* glsl */ `
+precision mediump float;
+
+uniform float uTime;
+uniform float uVel;
+uniform float uRand;
+uniform float uDisplacement;
+uniform vec3  uDirection;
+
+varying vec3 vNormal;
+varying vec3 vPosition;
+varying vec3 vWorldPosition;
+varying vec3 vViewDirection;
+varying vec2 vUv;
+
+void main() {
+  vec3 pos = position;
+  pos += uDirection * uVel * 0.005 * uRand;
+  pos += uDirection * uDisplacement;
+  pos += uDirection * sin(uTime * 0.002 * uRand) * 0.015;
+
+  vNormal       = normalMatrix * normal;
+  vPosition     = pos;
+  vWorldPosition = (modelMatrix * vec4(pos, 1.0)).xyz;
+
+  vec4 mvPosition = modelViewMatrix * vec4(pos, 1.0);
+  vViewDirection  = -mvPosition.xyz;
+  vUv             = uv;
+
+  gl_Position = projectionMatrix * mvPosition;
+}
+`;
+
+  const panelFragmentShader = /* glsl */ `
+precision mediump float;
+
+uniform sampler2D uBackground;
+uniform vec2  uResolution;
+uniform float uTime;
+uniform float uRefraction;
+uniform float uBevelDepth;
+uniform float uBevelWidth;
+uniform bool  uSpecular;
+uniform float uRand;
+uniform float uAlpha;
+uniform float uActive;
+
+varying vec3 vNormal;
+varying vec3 vPosition;
+varying vec3 vWorldPosition;
+varying vec3 vViewDirection;
+varying vec2 vUv;
+
+float triangleEdgeFactor(vec2 uv) {
+  float edgeDist = min(min(uv.x, 1.0 - uv.x), min(uv.y, 1.0 - uv.y));
+  return smoothstep(0.0, uBevelWidth * 0.5, edgeDist);
+}
+
+void main() {
+  vec3 normal  = normalize(vNormal);
+  vec3 viewDir = normalize(vViewDirection);
+
+  vec2 screenUV = gl_FragCoord.xy / uResolution;
+  float edge    = 1.0 - triangleEdgeFactor(vUv);
+  float offsetAmt = edge * uRefraction + pow(edge, 10.0) * uBevelDepth;
+
+  vec3 refractDir    = refract(viewDir, normal, 0.9);
+  vec2 refractOffset = refractDir.xy * offsetAmt;
+
+  vec2 p = vUv - 0.5;
+  float centreBlend  = smoothstep(0.15, 0.45, length(p));
+  vec2 normalOffset  = normalize(p) * offsetAmt * centreBlend;
+  vec2 offset        = refractOffset + normalOffset * 0.5;
+
+  vec2  refractedUV = screenUV + offset;
+  float oob = max(
+    max(-refractedUV.x, refractedUV.x - 1.0),
+    max(-refractedUV.y, refractedUV.y - 1.0)
+  );
+  float blend    = 1.0 - smoothstep(0.0, 0.01, oob);
+  vec2 sampleUV  = mix(screenUV, refractedUV, blend);
+
+  vec4 baseCol = texture2D(uBackground, screenUV);
+  if (baseCol.a < 0.01) baseCol = vec4(0.9, 0.9, 0.9, 0.3);
+
+  vec4 refrCol = texture2D(uBackground, sampleUV);
+  if (refrCol.a < 0.01) refrCol = baseCol;
+  refrCol.rgb += vec3(0.25, 0.25, 0.15) * uActive;
+
+  vec4 final = refrCol;
+
+  if (uSpecular) {
+    vec2 lp1 = vec2(sin(uTime * 0.002 * uRand),           cos(uTime * 0.003 * uRand))           * 0.6 + 0.5;
+    vec2 lp2 = vec2(sin(uTime * -0.004 * uRand + 1.5),    cos(uTime * 0.0025 * uRand - 0.5))   * 0.6 + 0.5;
+
+    float highlight = 0.0;
+    highlight += smoothstep(0.4, 0.0, distance(vUv, lp1)) * 0.15;
+    highlight += smoothstep(0.5, 0.0, distance(vUv, lp2)) * 0.12;
+    highlight *= 1.0 - edge * 0.5;
+    final.rgb += highlight;
+  }
+
+  float fresnel = pow(1.0 - abs(dot(viewDir, normal)), 3.0);
+  final.rgb += fresnel * 0.1 * edge;
+  final.rgb *= mix(1.0, 0.85, edge);
+  final.a    = mix(0.7, 0.95, edge) * final.a * uAlpha;
+
+  gl_FragColor = final;
+}
+`;
+
+  // ─── Background (gradient circle) shaders ────────────────────────────────────
+
+  const NOISE_GLSL = /* glsl */ `
+vec4 permute(vec4 x) { return mod(((x * 34.0) + 1.0) * x, 289.0); }
+vec4 taylorInvSqrt(vec4 r) { return 1.79284291400159 - 0.85373472095314 * r; }
+
+float snoise(vec3 v) {
+  const vec2 C = vec2(1.0 / 6.0, 1.0 / 3.0);
+  const vec4 D = vec4(0.0, 0.5, 1.0, 2.0);
+  vec3 i  = floor(v + dot(v, C.yyy));
+  vec3 x0 = v - i + dot(i, C.xxx);
+  vec3 g  = step(x0.yzx, x0.xyz);
+  vec3 l  = 1.0 - g;
+  vec3 i1 = min(g.xyz, l.zxy);
+  vec3 i2 = max(g.xyz, l.zxy);
+  vec3 x1 = x0 - i1 + C.xxx;
+  vec3 x2 = x0 - i2 + 2.0 * C.xxx;
+  vec3 x3 = x0 - 1.0 + 3.0 * C.xxx;
+  i = mod(i, 289.0);
+  vec4 p = permute(permute(permute(
+    i.z + vec4(0.0, i1.z, i2.z, 1.0)) +
+    i.y + vec4(0.0, i1.y, i2.y, 1.0)) +
+    i.x + vec4(0.0, i1.x, i2.x, 1.0));
+  float n_ = 1.0 / 7.0;
+  vec3 ns  = n_ * D.wyz - D.xzx;
+  vec4 j   = p - 49.0 * floor(p * ns.z * ns.z);
+  vec4 x_  = floor(j * ns.z);
+  vec4 y_  = floor(j - 7.0 * x_);
+  vec4 x   = x_ * ns.x + ns.yyyy;
+  vec4 y   = y_ * ns.x + ns.yyyy;
+  vec4 h   = 1.0 - abs(x) - abs(y);
+  vec4 b0  = vec4(x.xy, y.xy);
+  vec4 b1  = vec4(x.zw, y.zw);
+  vec4 s0  = floor(b0) * 2.0 + 1.0;
+  vec4 s1  = floor(b1) * 2.0 + 1.0;
+  vec4 sh  = -step(h, vec4(0.0));
+  vec4 a0  = b0.xzyw + s0.xzyw * sh.xxyy;
+  vec4 a1  = b1.xzyw + s1.xzyw * sh.zzww;
+  vec3 p0  = vec3(a0.xy, h.x);
+  vec3 p1  = vec3(a0.zw, h.y);
+  vec3 p2  = vec3(a1.xy, h.z);
+  vec3 p3  = vec3(a1.zw, h.w);
+  vec4 norm = taylorInvSqrt(vec4(dot(p0,p0), dot(p1,p1), dot(p2,p2), dot(p3,p3)));
+  p0 *= norm.x; p1 *= norm.y; p2 *= norm.z; p3 *= norm.w;
+  vec4 m = max(0.6 - vec4(dot(x0,x0), dot(x1,x1), dot(x2,x2), dot(x3,x3)), 0.0);
+  m = m * m;
+  return 42.0 * dot(m * m, vec4(dot(p0,x0), dot(p1,x1), dot(p2,x2), dot(p3,x3)));
+}
+`;
+
+  const BASE_COLOR = "#fe03a2";
+  const WAVE_COLORS = ["#FC85AE", "#8d73f5"];
+  const seed = Math.random() * 10;
+
+  const waves = WAVE_COLORS.map((color, i) => {
+    const e = i + 1;
+    return {
+      color: new Color(color),
+      noiseFreq: [
+        2 + e / (WAVE_COLORS.length + 1),
+        3 + e / (WAVE_COLORS.length + 1),
+      ],
+      noiseSpeed: 11 + 0.3 * e,
+      noiseFlow: 6.5 + 0.3 * e,
+      noiseSeed: seed + 10 * e,
+      noiseFloor: 0.1,
+      noiseCeil: 0.63 + 0.07 * e,
+    };
+  });
+
+  const circleVertexShader = /* glsl */ `
+precision highp float;
+${NOISE_GLSL}
+
+#define WAVES ${waves.length}
+
+struct WaveLayer {
+  vec3  color;
+  vec2  noiseFreq;
+  float noiseSpeed;
+  float noiseFlow;
+  float noiseSeed;
+  float noiseFloor;
+  float noiseCeil;
+};
+
+uniform float uTime;
+uniform float uNoiseSpeed;
+uniform float uVel;
+uniform vec2  uResolution;
+uniform vec2  uNoiseFreq;
+uniform vec3  uBaseColor;
+uniform WaveLayer uWaveLayers[WAVES];
+
+varying vec3 vColor;
+varying vec2 vUv;
+
+vec3 blendNormal(vec3 base, vec3 blend, float opacity) {
+  return blend * opacity + base * (1.0 - opacity);
+}
+
+void main() {
+  vUv = uv;
+  float sp = uTime * uNoiseSpeed + uVel * 0.0007;
+  vec3  color    = uBaseColor;
+  vec2  uvNorm   = uv * 2.0 - 1.0;
+  vec2  noiseCoord = uResolution * uvNorm * uNoiseFreq;
+
+  for (int i = 0; i < WAVES; i++) {
+    WaveLayer layer = uWaveLayers[i];
+    float noiseVal = smoothstep(
+      layer.noiseFloor,
+      layer.noiseCeil,
+      snoise(vec3(
+        noiseCoord.x * layer.noiseFreq.x + sp * layer.noiseFlow,
+        noiseCoord.y * layer.noiseFreq.y,
+        sp * layer.noiseSpeed + layer.noiseSeed
+      )) * 0.5 + 0.5
+    );
+    color = blendNormal(color, layer.color, pow(noiseVal, 4.0));
+  }
+
+  vColor      = color;
+  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+}
+`;
+
+  const circleFragmentShader = /* glsl */ `
+precision highp float;
+
+uniform float uAlpha;
+
+varying vec2 vUv;
+varying vec3 vColor;
+
+void main() {
+  if (distance(vUv, vec2(0.5)) > 0.5) discard;
+  gl_FragColor = vec4(vColor * uAlpha, uAlpha);
+}
+`;
+
+  const circleUniforms = {
+    ...globals,
+    uBaseColor: { value: new Color(BASE_COLOR) },
+    uNoiseFreq: {
+      value: new Vector2(0.0001, 0.0001).divideScalar(
+        window.devicePixelRatio,
+      ),
+    },
+    uNoiseSpeed: { value: 0.000005 },
+    uWaveLayers: { value: waves },
+    uAlpha: { value: 0 },
+  };
+
+  const circle = new Mesh(
+    new PlaneGeometry(1.7, 1.7, 100, 100),
+    new ShaderMaterial({
+      vertexShader: circleVertexShader,
+      fragmentShader: circleFragmentShader,
+      uniforms: circleUniforms,
+    }),
+  );
+
+  const ballGroup = new Group();
+  const panelsGroup = new Group();
+  scene.add(ballGroup);
+  ballGroup.add(panelsGroup);
+  ballGroup.add(circle);
+  circle.scale.setScalar(0);
+
+  const baseGeo = new IcosahedronGeometry(RADIUS, DETAIL);
+  const posAttr = baseGeo.attributes.position;
+  const faceCount = posAttr.count / 3;
+
+  type FaceData = {
+    mesh: Mesh;
+    normal: Vector3;
+    center: Vector3;
+    originalOffset: number;
+  };
+
+  const faceData: FaceData[] = [];
+
+  const _vA = new Vector3();
+  const _vB = new Vector3();
+  const _vC = new Vector3();
+  const _normal = new Vector3();
+  const _center = new Vector3();
+
+  for (let fi = 0; fi < faceCount; fi++) {
+    const i3 = fi * 3;
+
+    _vA.fromBufferAttribute(posAttr, i3);
+    _vB.fromBufferAttribute(posAttr, i3 + 1);
+    _vC.fromBufferAttribute(posAttr, i3 + 2);
+
+    _normal.copy(_vC).sub(_vB).cross(_vA.clone().sub(_vB)).normalize();
+    _center
+      .copy(_vA)
+      .add(_vB)
+      .add(_vC)
+      .multiplyScalar(1 / 3);
+
+    const shrink = (v: Vector3) => _center.clone().lerp(v, SHAPE_OFFSET);
+    const sA = shrink(_vA);
+    const sB = shrink(_vB);
+    const sC = shrink(_vC);
+
+    const u = sB.clone().sub(sA).normalize();
+    const w = _normal.clone();
+    const vDir = new Vector3().crossVectors(w, u);
+
+    const to2D = (v: Vector3): Vector2 => {
+      const vec = v.clone().sub(sA);
+      return new Vector2(vec.dot(u), vec.dot(vDir));
+    };
+
+    const [p0, p1, p2] = [to2D(sA), to2D(sB), to2D(sC)];
+    const shape = new Shape();
+    shape.moveTo(p0.x, p0.y);
+    shape.lineTo(p1.x, p1.y);
+    shape.lineTo(p2.x, p2.y);
+    shape.lineTo(p0.x, p0.y);
+
+    const geom = new ExtrudeGeometry(shape, {
+      steps: 2,
+      depth: THICKNESS,
+      bevelEnabled: false,
+      bevelThickness: BEVEL_SIZE,
+      bevelSize: BEVEL_SIZE,
+      bevelSegments: BEVEL_SEGMENTS,
+    });
+
+    const matrix = new Matrix4().makeBasis(u, vDir, w).setPosition(sA);
+    geom.applyMatrix4(matrix);
+    geom.computeVertexNormals();
+
+    const mat = new ShaderMaterial({
+      vertexShader: panelVertexShader,
+      fragmentShader: panelFragmentShader,
+      uniforms: {
+        ...globals,
+        uRand: { value: Math.random() + 0.1 },
+        uDirection: { value: _normal.clone() },
+        uDisplacement: { value: Math.random() * -1.7 - 0.1 },
+        uActive: { value: 0 },
+        uAlpha: { value: 0 },
+        uBackground: { value: renderTarget.texture },
+        uRefraction: { value: 0.001 + Math.random() * 0.001 },
+        uBevelDepth: { value: 0.008 + Math.random() * 0.002 },
+        uBevelWidth: { value: 1.0 + Math.random() * 0.2 },
+        uSpecular: { value: true },
+      },
+      transparent: true,
+    });
+
+    const mesh = new Mesh(geom, mat);
+    panelsGroup.add(mesh);
+    faceData.push({
+      mesh,
+      normal: _normal.clone(),
+      center: _center.clone(),
+      originalOffset: 0,
+    });
+  }
+
+  const mouse = new Vector2();
+  const raycaster = new Raycaster();
+  const toggled = new Set<number>();
+
+  document.addEventListener("pointermove", (e) => {
+    mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+    mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+  });
+
+  window.addEventListener("pointerdown", () => {
+    raycaster.setFromCamera(mouse, camera);
+    const hit = raycaster.intersectObjects(panelsGroup.children, false)[0];
+    if (!hit) return;
+    const idx = faceData.findIndex((f) => f.mesh === hit.object);
+    if (idx >= 0) togglePanel(idx);
+  });
+
+  function togglePanel(idx: number) {
+    const { mesh } = faceData[idx];
+    const uniforms = (mesh.material as ShaderMaterial).uniforms;
+    const isOn = toggled.has(idx);
+    isOn ? toggled.delete(idx) : toggled.add(idx);
+
+    gsap.fromTo(
+      uniforms.uDisplacement,
+      { value: isOn ? 0.1 : 0 },
+      { value: isOn ? 0 : 0.1 },
+    );
+    gsap.fromTo(
+      uniforms.uActive,
+      { value: isOn ? 1 : 0 },
+      { value: isOn ? 0 : 1 },
+    );
+  }
+
+  // Augment window for scroll globals (set elsewhere)
+  declare global {
+    interface Window {
+      scrollVelocity: number;
+      scrollDirection: number;
+      scrollCurrent: number;
+      scrollStickyOffsets: [number, number, number][];
+    }
+  }
+
+  window.scrollVelocity ??= 0;
+  window.scrollDirection ??= 1;
+  window.scrollCurrent ??= 0;
+  window.scrollStickyOffsets ??= [];
+
+  let smoothVel = 0;
+  let pixelToUnit = -FRUSTUM_SIZE / window.innerHeight;
+  let isPlaced = true;
+
+  gsap.ticker.fps(60);
+  gsap.ticker.add((t) => {
+    globals.uTime.value = t * 1000;
+
+    const vel = isPlaced ? 0 : window.scrollVelocity;
+    const abs = Math.abs(vel);
+    const dir = window.scrollDirection;
+
+    panelsGroup.rotation.y += (0.002 + abs * 0.001) * dir;
+    panelsGroup.rotation.x += (0.002 + abs * 0.001) * -dir;
+
+    smoothVel += (abs - smoothVel) * 0.05;
+    globals.uVel.value = smoothVel;
+    camera.position.y = window.scrollCurrent * pixelToUnit;
+
+    panelsGroup.visible = false;
+    renderer.setRenderTarget(renderTarget);
+    renderer.render(scene, camera);
+
+    renderer.setRenderTarget(null);
+    panelsGroup.visible = true;
+    renderer.render(scene, camera);
+  });
+
+  function animateIn() {
+    const ease = "elastic.out(1.3, 0.7)";
+
+    const displaces = faceData.map(
+      (f) => (f.mesh.material as ShaderMaterial).uniforms.uDisplacement,
+    );
+    const alphas = faceData.map(
+      (f) => (f.mesh.material as ShaderMaterial).uniforms.uAlpha,
+    );
+
+    gsap.to(displaces, { value: 0, duration: 0.7, ease });
+    gsap.to(alphas, { value: 1, duration: 0.5, delay: "random(0, 0.2)" });
+    gsap.to(circleUniforms.uAlpha, { value: 1, duration: 0.5 });
+
+    const s = { scale: 0 };
+    gsap.to(s, {
+      scale: 1,
+      duration: 0.7,
+      ease,
+      onUpdate() {
+        circle.scale.setScalar(s.scale);
+      },
+    });
+  }
+
+  setTimeout(animateIn, 200);
+
+  class SyGL extends HTMLElement {
+    private width = 0;
+    private height = 0;
+    private tl: ReturnType<typeof gsap.timeline> | null = null;
+
+    constructor() {
+      super();
+      addResizeObserver(this);
+      this.onResize();
+    }
+
+    connectedCallback() {
+      const placeholders = Array.from(
+        document.querySelectorAll<HTMLElement>("[data-gl-place]"),
+      );
+      let positions = new WeakMap<
+        HTMLElement,
+        { x: number; y: number; scale: number; factor: number }
+      >();
+
+      const computePosData = (el: HTMLElement) => {
+        if (!positions.has(el)) {
+          const { top: _top, left, width, height } = el.getBoundingClientRect();
+          const top = _top + window.scrollY;
+          const centerX = left + width / 2;
+          const centerY = top + height / 2;
+          const pxToUnitX = (FRUSTUM_SIZE * aspect) / this.width;
+          const pxToUnitY = FRUSTUM_SIZE / this.height;
+          const factor = parseFloat(
+            el.getAttribute("data-gl-place-factor") ?? "1",
+          );
+
+          positions.set(el, {
+            x: (centerX - this.width / 2) * pxToUnitX,
+            y: -(centerY - this.height / 2) * pxToUnitY,
+            scale: width * pxToUnitX * 0.5,
+            factor,
+          });
+        }
+        return positions.get(el)!;
+      };
+
+      const setFirst = () => {
+        const d = computePosData(placeholders[0]);
+        ballGroup.position.x = d.x;
+        ballGroup.position.y = d.y;
+        ballGroup.scale.setScalar(d.scale);
+      };
+
+      const tl = gsap.timeline({
+        defaults: { ease: "none" },
+        scrollTrigger: {
+          trigger: document.body,
+          scrub: true,
+          invalidateOnRefresh: true,
+          fastScrollEnd: true,
+          onRefresh: () => {
+            positions = new WeakMap();
+            setFirst();
+          },
+          start: () => `${Math.round(window.innerHeight / 2)}px center`,
+          end: () => {
+            const last =
+              placeholders[placeholders.length - 1].getBoundingClientRect();
+            return `+=${Math.round(last.top + window.scrollY)}px bottom`;
+          },
+        },
+      });
+
+      tl.add(() => setFirst());
+
+      placeholders.forEach((hldr, i) => {
+        const prev = placeholders[i - 1];
+        if (!prev) return;
+
+        const duration = () => {
+          const p = computePosData(prev);
+          const h = computePosData(hldr);
+          return Math.round(Math.sqrt((p.y - h.y) ** 2) * 10) * p.factor;
+        };
+
+        tl.to(ballGroup.position, {
+          duration,
+          x: () => computePosData(hldr).x,
+          y: () => computePosData(hldr).y,
+        });
+
+        tl.to(
+          ballGroup.scale,
+          {
+            duration,
+            x: () => computePosData(hldr).scale,
+            y: () => computePosData(hldr).scale,
+            z: () => computePosData(hldr).scale,
+            onUpdate() {
+              const prg = this.progress();
+              if (prg === 0 || prg === 1) {
+                isPlaced = true;
+              } else if (isPlaced) {
+                isPlaced = false;
+              }
+            },
+          },
+          "<",
+        );
+      });
+
+      this.tl = tl;
+
+      const ro = new ResizeObserver(() => tl.scrollTrigger?.refresh());
+      ro.observe(document.body);
+    }
+
+    onResize = () => {
+      this.width = window.innerWidth;
+      this.height = window.innerHeight;
+
+      pixelToUnit = -FRUSTUM_SIZE / this.height;
+
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio ?? 1, 2));
+      renderer.setSize(this.width, this.height);
+
+      globals.uResolution.value.set(canvas.width, canvas.height);
+      renderTarget.setSize(this.width, this.height);
+
+      aspect = this.width / this.height;
+      camera.left = (-FRUSTUM_SIZE * aspect) / 2;
+      camera.right = (FRUSTUM_SIZE * aspect) / 2;
+      camera.top = FRUSTUM_SIZE / 2;
+      camera.bottom = -FRUSTUM_SIZE / 2;
+      camera.updateProjectionMatrix();
+
+      requestAnimationFrame(() => {
+        this.tl?.scrollTrigger?.refresh();
+      });
+    };
+  }
+
+  customElements.define("sy-gl", SyGL);
+  }
+</script>
+
+<style>
+  sy-gl {
+    position: fixed;
+    z-index: 8;
+    pointer-events: none;
+    top: 0;
+    left: 0;
+  }
+</style>

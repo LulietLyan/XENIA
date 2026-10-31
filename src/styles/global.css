@@ -1,0 +1,133 @@
+@import './reset.css';
+@import './utils.css';
+@import './reveals.css';
+
+:root {
+  /* fonts */
+  --font-size-base: 20px;
+  --font-size-lg: 1.1rem;
+  --font-size-md: 1rem;
+  --font-size-sm: 0.9rem;
+  --font-size-xs: 0.8rem;
+
+  /* colors */
+  --rgb-white: 255, 255, 255;
+  --rgb-black: 0, 0, 0;
+
+  --rgb-text: 11, 31, 91; /* #0b1f5b */
+  --rgb-text-alt: 132, 142, 172; /* #848eac */
+  --rgb-brand-1: 141, 115, 245; /* #8d73f5 */
+  --rgb-brand-2: 221, 232, 184; /* #dde8b8 */
+  --rgb-brand-3: 236, 231, 253; /* #ece7fd */
+  --rgb-brand-4: 232, 242, 207; /* #e8f2cf */
+  --rgb-brand-5: 140, 175, 49; /* #8caf31 */
+
+  --color-text: rgb(var(--rgb-text));
+  --color-text-alt: rgb(var(--rgb-text-alt));
+  --color-white: rgb(var(--rgb-white));
+  --color-black: rgb(var(--rgb-black));
+  --color-brand-1: rgb(var(--rgb-brand-1));
+  --color-brand-2: rgb(var(--rgb-brand-2));
+  --color-brand-3: rgb(var(--rgb-brand-3));
+  --color-brand-4: rgb(var(--rgb-brand-4));
+  --color-brand-5: rgb(var(--rgb-brand-5));
+  --color-bg: #f7f8f2;
+
+  /* easings */
+  --ease-in-quad: cubic-bezier(0.55, 0.085, 0.68, 0.53);
+  --ease-in-cubic: cubic-bezier(0.55, 0.055, 0.675, 0.19);
+  --ease-in-quart: cubic-bezier(0.895, 0.03, 0.685, 0.22);
+  --ease-in-quint: cubic-bezier(0.755, 0.05, 0.855, 0.06);
+  --ease-in-expo: cubic-bezier(0.95, 0.05, 0.795, 0.035);
+  --ease-in-circ: cubic-bezier(0.6, 0.04, 0.98, 0.335);
+  --ease-out-quad: cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  --ease-out-cubic: cubic-bezier(0.215, 0.61, 0.355, 1);
+  --ease-out-quart: cubic-bezier(0.165, 0.84, 0.44, 1);
+  --ease-out-quint: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-out-expo: cubic-bezier(0.19, 1, 0.22, 1);
+  --ease-out-circ: cubic-bezier(0.075, 0.82, 0.165, 1);
+  --ease-out-back: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ease-in-out-quad: cubic-bezier(0.455, 0.03, 0.515, 0.955); --ease-in-out-cubic: cubic-bezier(0.645, 0.045, 0.355, 1); --ease-in-out-quart: cubic-bezier(0.77, 0, 0.175, 1); --ease-in-out-quint: cubic-bezier(0.86, 0, 0.07, 1); --ease-in-out-expo: cubic-bezier(1, 0, 0, 1);
+  --ease-in-out-circ: cubic-bezier(0.785, 0.135, 0.15, 0.86);
+
+  /* grid */
+  --container-max-width: 72rem;
+  --container-offset: 4rem;
+
+  @media (--mq-desktop-sm) {
+    --font-size-base: 18px;
+    --container-offset: 3rem;
+  }
+
+  @media (--mq-tablet) {
+    --font-size-base: 16px;
+    --container-offset: 2rem;
+  }
+
+  @media (--mq-phone) {
+    --container-offset: 1.5rem;
+  }
+}
+
+html,
+body {
+  margin: 0;
+  color: var(--color-text);
+  background: var(--color-bg);
+  font: 400 var(--font-size-base) / 1.2 var(--font-inter), "PingFang SC", "Microsoft YaHei", sans-serif;
+}
+
+a {
+  color: currentcolor;
+  text-decoration: none;
+}
+
+button {
+  color: currentcolor;
+}
+
+.u-text {
+  font-family: var(--font-inter), "PingFang SC", "Microsoft YaHei", sans-serif;
+}
+
+p.u-text {
+  --fh: 1.75;
+}
+
+.u-heading {
+  font-family: var(--font-roboto-slab), "Songti SC", "Noto Serif SC", serif;
+}
+
+[id] {
+  scroll-margin-top: 6rem;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-brand-1);
+  outline-offset: 5px;
+}
+
+body.is-nav-opened {
+  overflow: hidden;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  [data-sy-reveal],
+  [data-sy-reveal] .i,
+  [data-sy-reveal] .i-mask {
+    opacity: 1 !important;
+    clip-path: none !important;
+    transform: none !important;
+  }
+
+  sy-text-marquee .outer {
+    transform: none !important;
+  }
+}

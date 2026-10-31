@@ -1,0 +1,17 @@
+---
+import Layout from '../layouts/Layout.astro';
+import Button from '../components/Button.astro';
+---
+<Layout title="页面未找到">
+  <section class="u-container missing">
+    <p>404 / A LITTLE DETOUR</p>
+    <h1 class="u-heading">页面未找到</h1>
+    <p>链接可能有误，请返回首页查看作品和文章。</p>
+    <Button title="回到首页" url={import.meta.env.BASE_URL} revealable={false} arrow />
+  </section>
+</Layout>
+<style>
+  .missing { padding: 10rem 0 8rem; min-height: 80vh; }
+  h1 { --fs: 2.5rem; margin: 1rem 0; }
+  p { line-height: 1.8; margin-bottom: 2rem; }
+</style>

@@ -1,0 +1,118 @@
+---
+import { Font } from "astro:assets";
+import Header from "../components/Header.astro";
+import Footer from "../components/Footer.astro";
+import SmoothScroll from "../components/SmoothScroll.astro";
+import { useTranslations } from "../i18n/utils";
+import "../styles/global.css";
+
+interface Props {
+  title: string;
+  description?: string;
+  image?: string;
+  article?: boolean;
+}
+
+const {
+  title: _title,
+  description = "XENIA 的个人作品集与游戏观察：收录项目实践、玩法分析、商业化研究与社区观察。",
+  image,
+  article = false,
+} = Astro.props;
+const t = useTranslations();
+const base = `${import.meta.env.BASE_URL.replace(/\/$/, "")}/`;
+
+const links = [
+  { title: "首页", url: base },
+  { title: "作品", url: `${base}#work` },
+  { title: "文章", url: `${base}#journal` },
+  { title: "关于", url: `${base}#about` },
+];
+
+const site = Astro.site ?? new URL("https://lulietlyan.github.io");
+const ogType = article ? "article" : "website";
+const ogUrl = new URL(Astro.url.pathname, site).href;
+const ogImage = new URL(image ?? "og.png", new URL(base, site)).href;
+const title = _title.includes("XENIA") ? _title : `${_title} · XENIA`;
+---
+
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <Font cssVariable="--font-roboto-slab" preload />
+    <Font cssVariable="--font-inter" preload />
+    <link rel="icon" type="image/svg+xml" href={`${base}favicon.svg`} />
+    <link rel="canonical" href={ogUrl} />
+    <meta name="description" content={description} />
+    <meta name="author" content="XENIA" />
+    <meta name="theme-color" content="#ece7fd" />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:site_name" content="XENIA" />
+    <meta property="og:locale" content="zh_CN" />
+    <meta property="og:type" content={ogType} />
+    <meta property="og:url" content={ogUrl} />
+    <meta property="og:image" content={ogImage} />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={title} />
+    <meta name="twitter:description" content={description} />
+    <meta name="twitter:image" content={ogImage} />
+    <title>{title}</title>
+  </head>
+  <body>
+    <a href="#main" class="skip-link">{t("accessibility.skip-to-content")}</a>
+    <Header
+      logoUrl={base}
+      logoAlt="XENIA"
+      links={links}
+      link1={{ title: "哔哩哔哩 ↗", url: "https://space.bilibili.com/26270462", target: "_blank" }}
+      link2={{
+        title: "作品集",
+        url: `${base}#work`,
+      }}
+    />
+    <main id="main" tabindex="-1">
+      <slot />
+    </main>
+    <Footer logoUrl={base} logoAlt="XENIA" links={links} />
+    <SmoothScroll />
+    <noscript>
+      <style is:inline>
+        [data-sy-reveal], sy-text-marquee, sy-image-marquee { opacity: 1 !important; clip-path: none !important; transform: none !important; }
+        sy-footer footer { position: static !important; }
+        .faq .panel { height: auto !important; display: block !important; }
+        sy-head .toggle { display: none !important; }
+        @media (max-width: 987px) {
+          sy-head .menu { position: static !important; width: 100% !important; height: auto !important; clip-path: none !important; pointer-events: auto !important; order: 3; background: transparent !important; }
+          sy-head .menu ul { flex-direction: row !important; font-size: 1rem !important; padding-top: 1rem !important; }
+        }
+      </style>
+    </noscript>
+  </body>
+</html>
+
+<style>
+  .skip-link {
+    background: var(--color-brand-1);
+    left: 0;
+    right: 0;
+    margin: auto;
+    width: min-content;
+    white-space: nowrap;
+    padding: 0.5rem;
+    position: absolute;
+    transform: translateY(-100%);
+    transition: transform 0.3s ease;
+    z-index: 100;
+    color: var(--color-white);
+  }
+
+  .skip-link:focus {
+    transform: translateY(0%);
+  }
+</style>
+
+<script>
+  import "../utils/reveals";
+</script>

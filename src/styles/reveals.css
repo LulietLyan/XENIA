@@ -1,0 +1,33 @@
+[data-sy-reveal="lines"],
+[data-sy-reveal="words"] {
+  opacity: 0;
+  font-kerning: none;
+  text-rendering: optimizespeed;
+
+  &.is-in {
+    opacity: 1;
+  }
+
+  .i-mask {
+    display: inline-block;
+    clip-path: inset(8% -10% -8%);
+  }
+
+  .i {
+    display: inline-block;
+    will-change: transform;
+    transform: translateZ(0);
+  }
+
+  &.u-heading {
+    .i-mask {
+      clip-path: inset(11% -1% -11%);
+    }
+  }
+}
+
+[data-sy-reveal="lines"] {
+  .i-mask {
+    display: block;
+  }
+}

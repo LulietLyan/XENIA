@@ -1,0 +1,82 @@
+<script>
+  declare global {
+    interface Window {
+      scrollVelocity: number;
+      scrollDirection: number;
+      scrollCurrent: number;
+      scrollStickyOffsets: [number, number, number][];
+    }
+  }
+
+  import Lenis from "lenis";
+  import ScrollTrigger from "gsap/ScrollTrigger";
+  import { addGlobalTicker } from "../utils/globalTicker";
+
+  window.scrollStickyOffsets = window.scrollStickyOffsets || [];
+  window.scrollVelocity = 0;
+  window.scrollDirection = 1;
+  window.scrollCurrent = window.scrollY;
+
+  const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+  let lenis: Lenis | undefined;
+
+  function updateMotionPreference() {
+    lenis?.destroy();
+    lenis = undefined;
+    window.scrollVelocity = 0;
+    window.scrollCurrent = window.scrollY;
+
+    if (!reducedMotion.matches) {
+      lenis = new Lenis({
+        syncTouch: true,
+        lerp: 0.125,
+        anchors: true,
+        prevent: () => document.body.classList.contains("is-nav-opened"),
+      });
+      lenis.on("scroll", ScrollTrigger.update);
+      lenis.direction = 1;
+    }
+  }
+
+  updateMotionPreference();
+  reducedMotion.addEventListener("change", updateMotionPreference);
+
+  addGlobalTicker((t: number) => {
+    if (lenis) {
+      lenis.raf(t * 1000);
+      window.scrollVelocity = lenis.velocity;
+      window.scrollDirection = lenis.direction;
+      window.scrollCurrent = lenis.animatedScroll;
+    } else {
+      const delta = window.scrollY - window.scrollCurrent;
+      window.scrollVelocity = delta;
+      if (delta) window.scrollDirection = Math.sign(delta);
+      window.scrollCurrent = window.scrollY;
+    }
+  });
+</script>
+
+<style>
+  html.lenis,
+  html.lenis body {
+    height: auto;
+  }
+
+  .lenis:not(.lenis-autoToggle).lenis-stopped {
+    overflow: clip;
+  }
+
+  .lenis.lenis-smooth [data-lenis-prevent] {
+    overscroll-behavior: contain;
+  }
+
+  .lenis.lenis-smooth iframe {
+    pointer-events: none;
+  }
+
+  .lenis.lenis-autoToggle {
+    transition-property: overflow;
+    transition-duration: 1ms;
+    transition-behavior: allow-discrete;
+  }
+</style>
